@@ -112,6 +112,8 @@ export interface Fighter {
   guardDelay: number;
   /** Consecutive ticks the block input has been held (for just-guards). */
   blockHeld: number;
+  /** Ticks until a fresh block press may just-guard again (anti-mash). */
+  parryCd: number;
 
   /** Hits landed in the current combo against the opponent. */
   combo: number;

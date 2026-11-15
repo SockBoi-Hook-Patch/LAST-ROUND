@@ -38,6 +38,8 @@ export const PARRY_TICKS = 10;
 /** Block must have been held for at most this many ticks to just-guard. */
 export const PARRY_WINDOW = 6;
 export const PARRY_PUNISH = 14;
+/** A new block press cannot just-guard if the previous press was this recent. */
+export const PARRY_LOCKOUT = 30;
 export const INPUT_BUFFER_TICKS = 9;
 export const COMBO_LINGER_TICKS = 50;
 
@@ -257,6 +259,8 @@ export interface CharDef {
   maxGuard: number;
   /** Multiplies move recovery: < 1 is snappier, > 1 is more committal. */
   tempo: number;
+  /** Multiplies overdrive meter gain. */
+  meter: number;
   /** 1..5 pips shown on the select screen. */
   pips: { vitality: number; power: number; speed: number; reach: number };
 }
@@ -267,8 +271,8 @@ export const CHARS: Record<CharId, CharDef> = {
     ringName: 'KESTREL',
     realName: 'Mara Voss',
     playable: true,
-    maxHp: 900,
-    power: 0.88,
+    maxHp: 950,
+    power: 0.95,
     walk: 4.1,
     jumpV: 14.4,
     airSpeed: 4.3,
@@ -278,6 +282,7 @@ export const CHARS: Record<CharId, CharDef> = {
     bodyH: 180,
     maxGuard: 90,
     tempo: 0.86,
+    meter: 1.25,
     pips: { vitality: 3, power: 2, speed: 5, reach: 3 },
   },
   anvil: {
@@ -285,8 +290,8 @@ export const CHARS: Record<CharId, CharDef> = {
     ringName: 'ANVIL',
     realName: 'Dante Okafor',
     playable: true,
-    maxHp: 1180,
-    power: 1.22,
+    maxHp: 1120,
+    power: 1.17,
     walk: 2.9,
     jumpV: 12.8,
     airSpeed: 3.1,
@@ -295,7 +300,8 @@ export const CHARS: Record<CharId, CharDef> = {
     bodyW: 66,
     bodyH: 180,
     maxGuard: 125,
-    tempo: 1.14,
+    tempo: 1.16,
+    meter: 0.9,
     pips: { vitality: 5, power: 5, speed: 1, reach: 2 },
   },
   switch: {
@@ -314,6 +320,7 @@ export const CHARS: Record<CharId, CharDef> = {
     bodyH: 180,
     maxGuard: 100,
     tempo: 1.0,
+    meter: 1.0,
     pips: { vitality: 3, power: 3, speed: 4, reach: 3 },
   },
   pylon: {
@@ -321,17 +328,18 @@ export const CHARS: Record<CharId, CharDef> = {
     ringName: 'PYLON',
     realName: 'Oskar Lind',
     playable: true,
-    maxHp: 940,
-    power: 0.98,
+    maxHp: 910,
+    power: 0.95,
     walk: 3.3,
     jumpV: 13.9,
     airSpeed: 3.5,
-    reach: 1.2,
+    reach: 1.18,
     scale: 1.1,
     bodyW: 52,
     bodyH: 180,
     maxGuard: 95,
-    tempo: 1.04,
+    tempo: 1.08,
+    meter: 1.0,
     pips: { vitality: 2, power: 3, speed: 3, reach: 5 },
   },
   // Final opponent of the survival circuit. Not selectable.
@@ -351,6 +359,7 @@ export const CHARS: Record<CharId, CharDef> = {
     bodyH: 180,
     maxGuard: 130,
     tempo: 0.98,
+    meter: 1.1,
     pips: { vitality: 5, power: 4, speed: 3, reach: 4 },
   },
 };
