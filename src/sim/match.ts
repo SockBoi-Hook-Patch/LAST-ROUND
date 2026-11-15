@@ -525,11 +525,13 @@ function clampToArena(f: Fighter): number {
 }
 
 function noPush(f: Fighter): boolean {
-  return f.state === 'dodgeF' || f.state === 'launch';
+  // A fighter on the way up passes freely; bodies sort themselves out on the way down.
+  return f.state === 'dodgeF' || f.state === 'launch' || (f.y > 0 && f.vy > 0);
 }
 
 const MAX_PUSH_PER_TICK = 7;
 const PUSH_HEIGHT = 0.55;
+const PUSH_MARGIN = 11;
 
 function resolveBodies(m: MatchState): void {
   const [a, b] = m.fighters;
@@ -544,7 +546,8 @@ function resolveBodies(m: MatchState): void {
     const topA = A.y0 + (A.y1 - A.y0) * PUSH_HEIGHT;
     const topB = B.y0 + (B.y1 - B.y0) * PUSH_HEIGHT;
     if (A.y0 < topB && B.y0 < topA) {
-      const overlap = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0);
+      // Push boxes are a little wider than hurt boxes so strikes have room.
+      const overlap = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0) + PUSH_MARGIN * 2;
       if (overlap > 0) {
         const aLeft = a.x < b.x || (a.x === b.x && a.facing === 1);
         const push = Math.min(overlap / 2, MAX_PUSH_PER_TICK);
