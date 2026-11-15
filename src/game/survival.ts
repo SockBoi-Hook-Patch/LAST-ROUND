@@ -11,7 +11,7 @@ import type { CharId, FighterMods, MatchState } from '../sim/types';
 
 export const TOTAL_ROUNDS = 8;
 /** Share of max health restored between rounds before upgrades. */
-export const BASE_RECOVERY = 0.22;
+export const BASE_RECOVERY = 0.28;
 
 export type UpgradeId =
   | 'secondWind'
@@ -99,14 +99,14 @@ export interface RunState {
 
 /** Per-round difficulty: [AI level, health multiplier, damage multiplier]. */
 const CURVE: ReadonlyArray<readonly [number, number, number]> = [
-  [1, 0.68, 0.7],
-  [2, 0.78, 0.76],
-  [3.2, 0.88, 0.82],
-  [4.6, 1.0, 0.9],
-  [5.5, 1.0, 0.94],
-  [6.6, 1.06, 1.0],
-  [7.8, 1.12, 1.05],
-  [9, 1.0, 1.08],
+  [1, 0.6, 0.62],
+  [2, 0.68, 0.68],
+  [3, 0.76, 0.74],
+  [4, 0.86, 0.8],
+  [5, 0.9, 0.84],
+  [6, 0.95, 0.88],
+  [7, 1.0, 0.92],
+  [8.2, 0.95, 0.96],
 ];
 
 /** Original ring names for the challengers of the Undercroft circuit. */
