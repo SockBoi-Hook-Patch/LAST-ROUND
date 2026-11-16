@@ -1,0 +1,62 @@
+# Publishes the web client to GitHub Pages.
+#
+# One-time setup by a repository admin:
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+#
+# Optional, to enable the online mode on the published site:
+#   Settings → Secrets and variables → Actions → Variables → VITE_SERVER_URL
+#   (the public wss:// address of the match server — it is not a secret)
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

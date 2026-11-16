@@ -77,12 +77,14 @@ test.describe('survival run', () => {
     expect(after.score).toBeGreaterThan(0);
 
     // Light, light, heavy: a three hit combo shows on the counter.
+    // Each press follows the previous hit, so the test does not depend on
+    // wall-clock timing when the machine is busy.
+    await waitState(page, (s) => s.fighters[0]!.combo === 0 && s.fighters[1]!.state === 'idle', 8000);
     await page.evaluate(() => (window.__LR as DebugApi).place(92));
-    await page.waitForTimeout(600);
     await page.keyboard.press('KeyJ');
-    await page.waitForTimeout(110);
+    await waitState(page, (s) => s.fighters[0]!.combo >= 1, 4000);
     await page.keyboard.press('KeyJ');
-    await page.waitForTimeout(130);
+    await waitState(page, (s) => s.fighters[0]!.combo >= 2, 4000);
     await page.keyboard.press('KeyK');
     await waitState(page, (s) => s.fighters[0]!.combo >= 3, 4000);
     await expect(page.locator('.combo').first()).toBeVisible();

@@ -50,6 +50,11 @@ export class Input {
   private readonly keys = new Map<string, number>();
   private keyMask = 0;
   private touchMask = 0;
+  /**
+   * Buttons pressed since the simulation last read the pad. A tap that is
+   * pressed and released between two frames would otherwise never be seen.
+   */
+  private latch = 0;
   /** Pointers currently holding each touch button. */
   private readonly held = new Map<number, { el: HTMLElement; bit: number }>();
   private padPointer = -1;
@@ -73,9 +78,23 @@ export class Input {
     );
   }
 
-  /** Current controller mask. */
+  /** Buttons held right now (does not consume quick taps). */
   mask(): InputMask {
     return this.enabled ? this.keyMask | this.touchMask | this.padMask : 0;
+  }
+
+  /**
+   * Controller mask for the next simulation tick: everything held, plus any
+   * button that was tapped since the previous call.
+   */
+  consume(): InputMask {
+    if (!this.enabled) {
+      this.latch = 0;
+      return 0;
+    }
+    const m = this.keyMask | this.touchMask | this.padMask | this.latch;
+    this.latch = 0;
+    return m;
   }
 
   /** Drop everything that is held (focus lost, pause, screen change). */
@@ -84,6 +103,7 @@ export class Input {
     this.keyMask = 0;
     this.touchMask = 0;
     this.padMask = 0;
+    this.latch = 0;
     this.padPointer = -1;
     for (const h of this.held.values()) h.el.classList.remove('is-down');
     this.held.clear();
@@ -103,6 +123,7 @@ export class Input {
     e.preventDefault();
     if (e.repeat) return;
     this.keys.set(e.code, bit);
+    this.latch |= bit;
     this.recomputeKeys();
   }
 
@@ -149,6 +170,7 @@ export class Input {
         }
         this.held.set(e.pointerId, { el, bit });
         this.touchMask |= bit;
+        if (this.enabled) this.latch |= bit;
         el.classList.add('is-down');
       });
       el.addEventListener('pointerup', release);
@@ -165,6 +187,7 @@ export class Input {
         const dx = e.clientX - (r.left + r.width / 2);
         const dead = r.width * 0.06;
         this.padMask = dx < -dead ? IN.LEFT : dx > dead ? IN.RIGHT : 0;
+        if (this.enabled) this.latch |= this.padMask;
         left?.classList.toggle('is-down', this.padMask === IN.LEFT);
         right?.classList.toggle('is-down', this.padMask === IN.RIGHT);
       };

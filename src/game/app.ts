@@ -465,10 +465,10 @@ export class App {
       in0 = f.aiP ? aiInput(f.aiP, m, 0) : 0;
       in1 = f.ai ? aiInput(f.ai, m, 1) : 0;
     } else if (f.kind === 'survival') {
-      in0 = this.input.mask();
+      in0 = this.input.consume();
       in1 = f.ai ? aiInput(f.ai, m, 1) : 0;
     } else if (f.kind === 'training') {
-      in0 = this.input.mask();
+      in0 = this.input.consume();
       in1 = this.dummyInput(f);
     }
     stepMatch(m, in0, in1);

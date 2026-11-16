@@ -68,8 +68,10 @@ test.describe('online 1v1', () => {
     await a.page.keyboard.up('KeyA');
     // ...and B's own fighter did not move.
     expect((await state(b.page)).fighters[1]!.x).toBeCloseTo(b0.fighters[1]!.x, 0);
-    // Player B controls the other fighter only.
-    await a.page.waitForTimeout(250);
+    // Player B controls the other fighter only. (Wait for A's key release to
+    // reach the server first, so A's fighter is standing still.)
+    await waitState(a.page, (s) => s.fighters[0]!.state === 'idle', 8000);
+    await a.page.waitForTimeout(150);
     const a0 = await state(a.page);
     await b.page.keyboard.down('KeyD');
     await a.page.waitForFunction((x) => window.__LR!.state().fighters[1]!.x > x + 60, a0.fighters[1]!.x, { timeout: 8000 });

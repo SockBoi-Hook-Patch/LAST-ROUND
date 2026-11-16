@@ -327,7 +327,7 @@ export class OnlineMode {
   private frame(): void {
     const f = this.fight;
     if (!f) return;
-    const mask = this.app.input.mask();
+    const mask = this.app.input.consume();
     this.sinceSend++;
     // Send on change, plus a slow repeat in case a packet went missing.
     if (mask !== this.lastMask || this.sinceSend >= 10) {
