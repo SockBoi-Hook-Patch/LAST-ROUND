@@ -4,6 +4,7 @@
  * game is single-player and keeps no server-side records, so there is nothing
  * to cheat — but the hooks stay off for normal visitors all the same.
  */
+import { aiParamsForLevel, createAi } from '../sim/ai';
 import type { App } from './app';
 
 export interface DebugApi {
@@ -28,6 +29,8 @@ export interface DebugApi {
   setRound(round: number): void;
   /** Make the CPU opponent stand still (it keeps blocking nothing). */
   freezeCpu(on: boolean): void;
+  /** Replace the CPU opponent with one of the given skill level (1..10). */
+  cpuLevel(level: number): void;
 }
 
 declare global {
@@ -90,6 +93,10 @@ export function installDebug(app: App): void {
       if (!app.run) return;
       app.run.round = Math.max(1, Math.min(8, Math.floor(round)));
       app.startRound();
+    },
+    cpuLevel(level) {
+      const f = app.fight;
+      if (f) f.ai = createAi(aiParamsForLevel(level), 12345);
     },
     freezeCpu(on) {
       const f = app.fight;

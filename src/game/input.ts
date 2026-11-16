@@ -91,7 +91,7 @@ export class Input {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    if (!this.enabled || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (!this.enabled || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (PAUSE_KEYS.includes(e.code)) {
       if (!e.repeat) this.onPause?.();
       e.preventDefault();

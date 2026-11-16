@@ -63,6 +63,17 @@ export class Screens {
     return this.current !== null;
   }
 
+  /** Ignore activations for `ms` (stray double clicks, keys held across screens). */
+  private lock(ms: number): void {
+    this.locked = true;
+    this.root.dataset.locked = '1';
+    window.clearTimeout(this.unlockTimer);
+    this.unlockTimer = window.setTimeout(() => {
+      this.locked = false;
+      delete this.root.dataset.locked;
+    }, ms);
+  }
+
   private open(name: string, html: string, handlers: Handlers, back: (() => void) | null): void {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
@@ -74,9 +85,7 @@ export class Screens {
     this.root.hidden = false;
     this.root.scrollTop = 0;
     // Ignore clicks and key presses that were aimed at the previous screen.
-    this.locked = true;
-    window.clearTimeout(this.unlockTimer);
-    this.unlockTimer = window.setTimeout(() => (this.locked = false), 240);
+    this.lock(240);
     const target = this.root.querySelector<HTMLElement>('[data-autofocus]') ?? this.root.querySelector<HTMLElement>('button');
     // Focusing without scrolling keeps the layout still on mobile.
     (target ?? this.root).focus({ preventScroll: true });
@@ -86,6 +95,8 @@ export class Screens {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     window.clearTimeout(this.unlockTimer);
+    this.locked = false;
+    delete this.root.dataset.locked;
     this.current = null;
     this.handlers = {};
     this.back = null;
@@ -106,22 +117,22 @@ export class Screens {
     const fn = this.handlers[act];
     if (!fn) return;
     // One activation per screen: the handler is expected to navigate away.
-    this.locked = true;
-    window.clearTimeout(this.unlockTimer);
-    this.unlockTimer = window.setTimeout(() => (this.locked = false), 600);
+    this.lock(600);
     this.onSound?.(act === 'back' ? 'back' : 'select');
     fn(el);
   }
 
   private onKey(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
+      // The menu owns this key press: it must not also reach the game (where
+      // Escape would immediately pause the fight that was just resumed).
+      e.preventDefault();
+      e.stopPropagation();
       if (this.back && !this.locked) {
-        e.preventDefault();
-        this.locked = true;
-        window.clearTimeout(this.unlockTimer);
-        this.unlockTimer = window.setTimeout(() => (this.locked = false), 600);
+        const back = this.back;
+        this.lock(600);
         this.onSound?.('back');
-        this.back();
+        back();
       }
       return;
     }

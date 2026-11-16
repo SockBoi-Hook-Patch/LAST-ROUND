@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
     "server:dev": "tsx watch server/index.ts",
     "server:build": "esbuild server/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist-server/index.js --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
     "server:start": "node dist-server/index.js"
