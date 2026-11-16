@@ -9,11 +9,18 @@ import '@fontsource/chakra-petch/thai-700-italic.css';
 import './ui/styles.css';
 import { App } from './game/app';
 import { installDebug } from './game/debug';
+import { OnlineMode, serverUrl } from './game/online';
 
 function boot(): void {
   try {
     const app = new App();
     installDebug(app);
+    // Online play appears only when a match server is configured.
+    const url = serverUrl();
+    if (url) {
+      const online = new OnlineMode(app, url);
+      app.online = { available: true, open: () => online.open() };
+    }
     app.start();
   } catch (err) {
     // Last resort: say something readable instead of a blank page.

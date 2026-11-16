@@ -32,7 +32,7 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      testMatch: /(game|ui)\.spec\.ts/,
+      testMatch: /(game|ui|online)\.spec\.ts/,
       use: { viewport: { width: 1280, height: 720 } },
     },
     {

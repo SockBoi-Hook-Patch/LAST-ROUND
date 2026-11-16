@@ -376,6 +376,11 @@ export class App {
     return f;
   }
 
+  /** The external fight has finished and a result screen is showing. */
+  endExternalFight(): void {
+    this.setMode('menu');
+  }
+
   pause(): void {
     const f = this.fight;
     if (!f || f.kind === 'attract' || f.ended || this.paused || this.screens.isOpen) return;
