@@ -73,7 +73,6 @@ if (flag !== -1) {
   if (!body) throw new Error('could not find the page body');
   const fragment = [
     '<title>LAST ROUND</title>',
-    '<meta name="claude:viewport-fit-sides" content="cover">',
     '<meta name="theme-color" content="#07090f">',
     `<style>${style}</style>`,
     body[1].trim(),
