@@ -33,6 +33,9 @@ export const KEY_LABELS: Record<ActionName, string> = {
   SPECIAL: 'I / V',
 };
 
+/** Buttons whose quick taps must never be dropped (directions are held). */
+const TAP_BITS = IN.JUMP | IN.DODGE | IN.LIGHT | IN.HEAVY | IN.SPECIAL;
+
 const CODE_TO_BIT = new Map<string, number>();
 for (const name of Object.keys(KEYMAP) as ActionName[]) {
   for (const code of KEYMAP[name]) CODE_TO_BIT.set(code, IN[name]);
@@ -123,7 +126,9 @@ export class Input {
     e.preventDefault();
     if (e.repeat) return;
     this.keys.set(e.code, bit);
-    this.latch |= bit;
+    // Only buttons are latched; a latched direction could cancel out the
+    // opposite one held on the same tick.
+    if (bit & TAP_BITS) this.latch |= bit;
     this.recomputeKeys();
   }
 
@@ -170,7 +175,7 @@ export class Input {
         }
         this.held.set(e.pointerId, { el, bit });
         this.touchMask |= bit;
-        if (this.enabled) this.latch |= bit;
+        if (this.enabled && bit & TAP_BITS) this.latch |= bit;
         el.classList.add('is-down');
       });
       el.addEventListener('pointerup', release);
@@ -187,7 +192,6 @@ export class Input {
         const dx = e.clientX - (r.left + r.width / 2);
         const dead = r.width * 0.06;
         this.padMask = dx < -dead ? IN.LEFT : dx > dead ? IN.RIGHT : 0;
-        if (this.enabled) this.latch |= this.padMask;
         left?.classList.toggle('is-down', this.padMask === IN.LEFT);
         right?.classList.toggle('is-down', this.padMask === IN.RIGHT);
       };

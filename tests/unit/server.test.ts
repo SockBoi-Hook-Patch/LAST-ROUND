@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { startServer } from '../../server/index';
 import type { RunningServer } from '../../server/index';
-import { Lobby } from '../../server/lobby';
+import { IDLE_TICKS, Lobby } from '../../server/lobby';
 import type { Conn } from '../../server/lobby';
 import { CHARS, STAGE_W } from '../../src/sim/data';
 import { IN } from '../../src/sim/types';
 import type { MatchState } from '../../src/sim/types';
-import { applySnap, normaliseCode, packState, parseClientMsg, validServerUrl } from '../../src/net/protocol';
+import { applySnap, normaliseCode, packState, parseClientMsg, validServerUrl, validSnap } from '../../src/net/protocol';
 import type { ServerMsg } from '../../src/net/protocol';
 import { createMatch, stepMatch } from '../../src/sim/match';
 
@@ -313,6 +313,60 @@ describe('lobby', () => {
   });
 });
 
+describe('lobby hardening', () => {
+  it('a tap that is pressed and released between two ticks still happens', () => {
+    const { lobby, a, b } = pair();
+    for (let n = 0; n < 130; n++) lobby.tick();
+    const swings = (): number => b.inbox.filter((m) => m.t === 's' && m.s.e?.some((e) => e.type === 'swing' && e.who === 0)).length;
+    lobby.message(a, JSON.stringify({ t: 'input', mask: IN.LIGHT }));
+    lobby.message(a, JSON.stringify({ t: 'input', mask: 0 }));
+    for (let n = 0; n < 5; n++) lobby.tick();
+    expect(swings()).toBe(1);
+  });
+
+  it('a cancel that crosses a freshly made match is ignored', () => {
+    const lobby = new Lobby();
+    const a = new Fake();
+    const b = new Fake();
+    lobby.connect(a);
+    lobby.connect(b);
+    lobby.message(a, JSON.stringify({ t: 'quick', char: 'switch' }));
+    lobby.message(b, JSON.stringify({ t: 'quick', char: 'anvil' }));
+    lobby.message(a, JSON.stringify({ t: 'cancel' }));
+    expect(a.last('idle')).toBeUndefined();
+    expect(b.last('over')).toBeUndefined();
+    lobby.tick();
+    expect(a.last('s')).toBeDefined();
+    expect(lobby.stats().playing).toBe(1);
+  });
+
+  it('drops a connection that keeps guessing room codes', () => {
+    const lobby = new Lobby();
+    const a = new Fake();
+    lobby.connect(a);
+    for (let n = 0; n < 20 && !a.closed; n++) lobby.message(a, JSON.stringify({ t: 'join', code: 'ZZZZ', char: 'switch' }));
+    expect(a.closed).toBe(true);
+    expect(a.count('error')).toBeLessThanOrEqual(8);
+  });
+
+  it('closes connections that idle in the menu, but never players in a match', () => {
+    const { lobby, a, b } = pair();
+    const idle = new Fake();
+    lobby.connect(idle);
+    for (let n = 0; n < IDLE_TICKS + 2 * 60; n++) lobby.tick();
+    expect(idle.closed).toBe(true);
+    expect(a.closed || b.closed).toBe(false);
+  });
+
+  it('rejects malformed snapshots', () => {
+    const good = packState(createMatch({ char: 'switch' }, { char: 'pylon' }));
+    expect(validSnap(JSON.parse(JSON.stringify(good)))).toBe(true);
+    for (const bad of [null, {}, { h: [1, 2, 3], f: [] }, { ...good, f: [null, null] }, { ...good, f: [good.f[0], ['x']] }, { ...good, h: [0, 0, 0, NaN, 0, 0] }]) {
+      expect(validSnap(bad)).toBe(false);
+    }
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Real sockets                                                        */
 /* ------------------------------------------------------------------ */
@@ -446,6 +500,13 @@ describe('match server over WebSocket', () => {
     // The server is still healthy for everyone else.
     a.send({ t: 'quick', char: 'anvil' });
     await a.wait('queued');
+  });
+
+  it('caps connections from one address', async () => {
+    srv = await startServer({ port: 0, host: '127.0.0.1', maxPerIp: 2 });
+    await (await open()).wait('welcome');
+    await (await open()).wait('welcome');
+    await expect(connect(srv.port)).rejects.toThrow(/429/);
   });
 
   it('enforces the allowed origin list', async () => {

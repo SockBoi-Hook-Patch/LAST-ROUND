@@ -8,7 +8,7 @@
 import { audio } from '../audio';
 import { icon } from '../assets/icons';
 import { NetClient } from '../net/client';
-import { ROOM_CODE_LENGTH, applySnap, normaliseCode, validServerUrl, validStartState } from '../net/protocol';
+import { ROOM_CODE_LENGTH, applySnap, normaliseCode, validServerUrl, validSnap, validStartState } from '../net/protocol';
 import type { ErrorCode, ServerMsg, Snap } from '../net/protocol';
 import { charLook } from '../render/rig';
 import { CHARS, PLAYABLE } from '../sim/data';
@@ -43,6 +43,12 @@ const ERRORS: Record<ErrorCode, TextKey> = {
 
 /** Snapshots older than this many are applied without effects (tab was asleep). */
 const MAX_FX_BACKLOG = 12;
+/** Snapshots kept while frames are not running (hidden tab): the newest win. */
+const MAX_SNAP_QUEUE = 120;
+
+function winsOf(v: unknown): [number, number] {
+  return Array.isArray(v) ? [Number(v[0]) || 0, Number(v[1]) || 0] : [0, 0];
+}
 
 export class OnlineMode {
   private readonly app: App;
@@ -65,6 +71,17 @@ export class OnlineMode {
     this.url = url;
     this.net.onStatus = () => this.onStatus();
     this.net.onMessage = (m) => this.onMessage(m);
+    // A hidden tab stops sending frames: release every button on the server
+    // at once rather than leaving the fighter walking or guarding.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' && this.fight) this.releaseInputs();
+    });
+  }
+
+  private releaseInputs(): void {
+    this.lastMask = 0;
+    this.sinceSend = 0;
+    this.net.send({ t: 'input', mask: 0 });
   }
 
   /** Enter the online lobby from the title screen. */
@@ -84,6 +101,7 @@ export class OnlineMode {
     this.snaps.length = 0;
     this.app.onFrame = null;
     this.app.onQuitFight = null;
+    this.app.onHudRebuild = null;
   }
 
   private home(): void {
@@ -254,7 +272,13 @@ export class OnlineMode {
         this.showWaiting(typeof msg.code === 'string' ? msg.code : '');
         break;
       case 'idle':
-        if (!this.fight) this.showLobby();
+        if (this.fight) {
+          // The server closed the match (e.g. it ended while a request was in flight).
+          this.endMatch();
+          this.showDone(t('online.lost'), '', false);
+        } else {
+          this.showLobby();
+        }
         break;
       case 'error':
         if (!this.fight) this.showLobby(t(ERRORS[msg.code] ?? 'online.error.generic'));
@@ -263,18 +287,21 @@ export class OnlineMode {
         if ((msg.you === 0 || msg.you === 1) && validStartState(msg.state)) this.startRound(msg);
         break;
       case 's':
-        if (this.fight && msg.s && Array.isArray(msg.s.h) && Array.isArray(msg.s.f)) this.snaps.push(msg.s);
+        if (this.fight && validSnap(msg.s)) {
+          this.snaps.push(msg.s);
+          if (this.snaps.length > MAX_SNAP_QUEUE) this.snaps.splice(0, this.snaps.length - MAX_SNAP_QUEUE);
+        }
         break;
       case 'round':
         if (this.fight && Array.isArray(msg.wins)) {
-          this.wins = [Number(msg.wins[0]) || 0, Number(msg.wins[1]) || 0];
+          this.wins = winsOf(msg.wins);
           const mine = this.wins[this.you];
           const theirs = this.wins[this.you === 0 ? 1 : 0];
           this.app.hud.announce(`${mine} – ${theirs}`, msg.winner === 2 ? t('online.draw') : msg.winner === this.you ? t('online.win') : t('online.lose'), 1900);
         }
         break;
       case 'over': {
-        if (Array.isArray(msg.wins)) this.wins = [Number(msg.wins[0]) || 0, Number(msg.wins[1]) || 0];
+        if (Array.isArray(msg.wins)) this.wins = winsOf(msg.wins);
         const won = msg.winner === this.you;
         const title = msg.winner === 2 ? t('online.draw') : won ? t('online.win') : t('online.lose');
         this.endMatch();
@@ -293,22 +320,14 @@ export class OnlineMode {
   private startRound(msg: Extract<ServerMsg, { t: 'start' }>): void {
     const app = this.app;
     this.you = msg.you;
-    this.round = msg.round;
-    this.wins = [Number(msg.wins[0]) || 0, Number(msg.wins[1]) || 0];
+    this.round = Number(msg.round) || 1;
+    this.wins = winsOf(msg.wins);
     this.snaps.length = 0;
     this.lastMask = -1;
     const f = app.beginExternalFight('online', msg.state, this.you);
     this.fight = f;
-    const [a, b] = msg.state.fighters;
-    const youTag = t('online.you');
-    const rivalTag = t('online.rival');
-    app.hud.setup(msg.state, {
-      round: `ROUND ${this.round} · ${this.wins[0]}–${this.wins[1]}`,
-      names: [CHARS[a.char].ringName, CHARS[b.char].ringName],
-      tags: this.you === 0 ? [youTag, rivalTag] : [rivalTag, youTag],
-      score: false,
-      note: this.net.ping >= 0 ? t('online.ping', { n: this.net.ping }) : t('online.connected'),
-    });
+    this.setupHud();
+    app.onHudRebuild = () => this.setupHud();
     app.hud.announce(`ROUND ${this.round}`, t('online.bestof'), 1500);
     audio.play('roundStart');
     audio.setMusic('fight');
@@ -321,6 +340,22 @@ export class OnlineMode {
     this.pingTimer = window.setInterval(() => {
       if (this.fight && this.net.ping >= 0) app.hud.setNote(t('online.ping', { n: this.net.ping }));
     }, 2000);
+  }
+
+  /** HUD labels for the current round (also after a language change). */
+  private setupHud(): void {
+    const f = this.fight;
+    if (!f) return;
+    const [a, b] = f.m.fighters;
+    const youTag = t('online.you');
+    const rivalTag = t('online.rival');
+    this.app.hud.setup(f.m, {
+      round: `ROUND ${this.round} · ${this.wins[0]}–${this.wins[1]}`,
+      names: [CHARS[a.char].ringName, CHARS[b.char].ringName],
+      tags: this.you === 0 ? [youTag, rivalTag] : [rivalTag, youTag],
+      score: false,
+      note: this.net.ping >= 0 ? t('online.ping', { n: this.net.ping }) : t('online.connected'),
+    });
   }
 
   /** Once per rendered frame: send our input, apply what the server sent. */
@@ -356,6 +391,7 @@ export class OnlineMode {
     this.snaps.length = 0;
     this.app.onFrame = null;
     this.app.onQuitFight = null;
+    this.app.onHudRebuild = null;
     this.app.hud.show(false);
     audio.setMusic('interlude');
   }

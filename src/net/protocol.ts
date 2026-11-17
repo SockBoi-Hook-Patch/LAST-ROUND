@@ -180,6 +180,21 @@ export function validServerUrl(v: unknown): string | null {
   }
 }
 
+const SNAP_FIGHTER_LEN = 18;
+
+function finiteArray(v: unknown, len: number): v is number[] {
+  return Array.isArray(v) && v.length === len && v.every((n) => typeof n === 'number' && Number.isFinite(n));
+}
+
+/** Shape check of a snapshot from the server; anything else is dropped. */
+export function validSnap(v: unknown): v is Snap {
+  if (!v || typeof v !== 'object') return false;
+  const s = v as { h?: unknown; f?: unknown; e?: unknown };
+  if (!finiteArray(s.h, 6) || !Array.isArray(s.f) || s.f.length !== 2) return false;
+  if (!s.f.every((f) => finiteArray(f, SNAP_FIGHTER_LEN))) return false;
+  return s.e === undefined || Array.isArray(s.e);
+}
+
 /** Minimal sanity check of the match state a server sends at round start. */
 export function validStartState(v: unknown): v is MatchState {
   if (!v || typeof v !== 'object') return false;

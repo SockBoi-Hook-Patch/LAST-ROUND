@@ -8,6 +8,9 @@
  *   ALLOWED_ORIGINS  comma-separated list of web origins allowed to connect,
  *                    e.g. "https://example.github.io". Empty = any origin.
  *   MAX_CONNECTIONS  connection cap (default 400)
+ *   MAX_PER_IP       connections allowed from one address (default 6)
+ *   TRUST_PROXY      "1" when behind a reverse proxy that sets
+ *                    X-Forwarded-For (needed for the per-address cap)
  */
 import { randomInt } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -25,6 +28,10 @@ export interface ServerOptions {
   host?: string;
   allowedOrigins?: string[];
   maxConnections?: number;
+  /** Connections allowed from one client address. */
+  maxPerIp?: number;
+  /** Read the client address from X-Forwarded-For (only behind a trusted proxy). */
+  trustProxy?: boolean;
   /** Simulation ticks per second (tests run the clock faster). */
   tickRate?: number;
 }
@@ -37,6 +44,15 @@ export interface RunningServer {
 
 const HEARTBEAT_MS = 10_000;
 
+function clientAddress(req: IncomingMessage, trustProxy: boolean): string {
+  if (trustProxy) {
+    const fwd = req.headers['x-forwarded-for'];
+    const first = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
 function originAllowed(req: IncomingMessage, allowed: string[]): boolean {
   if (allowed.length === 0) return true;
   const origin = req.headers.origin;
@@ -46,6 +62,9 @@ function originAllowed(req: IncomingMessage, allowed: string[]): boolean {
 export function startServer(opts: ServerOptions = {}): Promise<RunningServer> {
   const allowed = (opts.allowedOrigins ?? []).map((o) => o.trim()).filter(Boolean);
   const maxConnections = opts.maxConnections ?? 400;
+  const maxPerIp = opts.maxPerIp ?? 6;
+  const trustProxy = opts.trustProxy ?? false;
+  const perIp = new Map<string, number>();
   const tickRate = opts.tickRate ?? 60;
   const lobby = new Lobby({ randomInt: (n) => randomInt(n) });
   const alive = new WeakMap<WebSocket, boolean>();
@@ -80,7 +99,21 @@ export function startServer(opts: ServerOptions = {}): Promise<RunningServer> {
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    const ip = clientAddress(req, trustProxy);
+    if ((perIp.get(ip) ?? 0) >= maxPerIp) {
+      socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.once('close', () => {
+        const n = (perIp.get(ip) ?? 1) - 1;
+        if (n <= 0) perIp.delete(ip);
+        else perIp.set(ip, n);
+      });
+      wss.emit('connection', ws, req);
+    });
   });
 
   wss.on('connection', (ws: WebSocket) => {
@@ -170,6 +203,8 @@ if (import.meta.url === entry) {
     host: process.env.HOST || '0.0.0.0',
     allowedOrigins: origins,
     maxConnections: Number(process.env.MAX_CONNECTIONS) || undefined,
+    maxPerIp: Number(process.env.MAX_PER_IP) || undefined,
+    trustProxy: process.env.TRUST_PROXY === '1',
   })
     .then((srv) => {
       console.log(`LAST ROUND match server listening on :${srv.port}`);

@@ -252,7 +252,8 @@ export class App {
         // Rebuild everything that carries text.
         this.hud.build();
         this.buildTouch();
-        if (this.fight && this.fight.kind !== 'attract') this.setupHud();
+        if (this.fight?.kind === 'online') this.onHudRebuild?.();
+        else if (this.fight && this.fight.kind !== 'attract') this.setupHud();
         this.goSettings(back);
       },
       onMotion: (m: MotionPref) => {
@@ -652,8 +653,20 @@ export class App {
 
   /** Optional per-frame hook for features that drive their own fight. */
   onFrame: ((dtMs: number) => void) | null = null;
+  /** Re-applies HUD labels of an external fight after the HUD is rebuilt. */
+  onHudRebuild: (() => void) | null = null;
 
   private frame(ms: number): void {
+    // Whatever happens while drawing this frame, the loop must keep running.
+    requestAnimationFrame((t2) => this.frame(t2));
+    try {
+      this.frameBody(ms);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  private frameBody(ms: number): void {
     const dt = Math.min(100, Math.max(0, ms - this.lastMs));
     this.lastMs = ms;
     this.frames++;
@@ -706,6 +719,5 @@ export class App {
       this.readyShown = true;
       this.elApp.dataset.ready = '1';
     }
-    requestAnimationFrame((t2) => this.frame(t2));
   }
 }

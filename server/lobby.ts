@@ -33,6 +33,15 @@ interface Player {
   room: Room | null;
   /** Latest controller mask received (already validated). */
   input: number;
+  /**
+   * Buttons pressed since the last simulated tick. Several messages can
+   * arrive between two ticks; a tap (press + release) must still count.
+   */
+  latch: number;
+  /** Wrong room codes tried (codes must not be guessable by brute force). */
+  badJoins: number;
+  /** Tick of the last time this player was queued, waiting or playing. */
+  lastBusy: number;
   /** Rate limiting: messages seen in the current window. */
   msgs: number;
   windowTick: number;
@@ -66,6 +75,12 @@ const WAITING_ROOM_TICKS = 5 * 60 * TICKS_PER_SECOND;
 const MAX_ROUNDS = 5;
 /** Messages allowed per second before a connection is dropped. */
 const MAX_MESSAGES_PER_SECOND = 240;
+/** Wrong room codes a connection may try before it is dropped. */
+const MAX_BAD_JOINS = 8;
+/** Connections that stay in the menu this long are closed to free the slot. */
+export const IDLE_TICKS = 3 * 60 * TICKS_PER_SECOND;
+/** Buttons that are latched between ticks (directions are simply held). */
+const TAP_BITS = 4 | 16 | 32 | 64 | 128;
 
 export class Lobby {
   private readonly players = new Map<Conn, Player>();
@@ -88,7 +103,17 @@ export class Lobby {
   }
 
   connect(conn: Conn): void {
-    this.players.set(conn, { conn, char: 'switch', room: null, input: 0, msgs: 0, windowTick: this.tickNo });
+    this.players.set(conn, {
+      conn,
+      char: 'switch',
+      room: null,
+      input: 0,
+      latch: 0,
+      badJoins: 0,
+      lastBusy: this.tickNo,
+      msgs: 0,
+      windowTick: this.tickNo,
+    });
     conn.send({ t: 'welcome', v: PROTOCOL_VERSION });
   }
 
@@ -121,7 +146,10 @@ export class Lobby {
     switch (msg.t) {
       case 'input':
         // Only meaningful inside a running match; otherwise ignored.
-        if (p.room && p.room.state === 'playing') p.input = msg.mask;
+        if (p.room && p.room.state === 'playing') {
+          p.latch |= msg.mask & ~p.input & TAP_BITS;
+          p.input = msg.mask;
+        }
         return;
       case 'ping':
         conn.send({ t: 'pong', ts: msg.ts });
@@ -156,7 +184,13 @@ export class Lobby {
       case 'join': {
         if (this.busy(p)) return this.error(p, 'busy');
         const room = this.byCode.get(msg.code);
-        if (!room || room.state === 'closed') return this.error(p, 'notfound');
+        if (!room || room.state === 'closed') {
+          if (++p.badJoins > MAX_BAD_JOINS) {
+            conn.close();
+            return;
+          }
+          return this.error(p, 'notfound');
+        }
         if (room.state !== 'waiting' || room.players[1]) return this.error(p, 'full');
         p.char = msg.char;
         p.room = room;
@@ -165,6 +199,11 @@ export class Lobby {
         return;
       }
       case 'cancel':
+        // Cancelling only applies before a match starts. A cancel that
+        // crosses a freshly made match on the wire is ignored, so the
+        // player is not dropped into a match that has already closed.
+        if (this.queue === p || (p.room && p.room.state === 'waiting')) this.detach(p, true);
+        return;
       case 'leave':
         this.detach(p, true);
         return;
@@ -174,6 +213,7 @@ export class Lobby {
   /** Advance every room by one simulation tick. */
   tick(): void {
     this.tickNo++;
+    if (this.tickNo % TICKS_PER_SECOND === 0) this.dropIdle();
     for (const room of this.rooms) {
       switch (room.state) {
         case 'waiting':
@@ -199,6 +239,14 @@ export class Lobby {
   }
 
   /* ---------------------------------------------------------------- */
+
+  /** Close connections that sit in the menu for too long. */
+  private dropIdle(): void {
+    for (const p of this.players.values()) {
+      if (this.busy(p)) p.lastBusy = this.tickNo;
+      else if (this.tickNo - p.lastBusy > IDLE_TICKS) p.conn.close();
+    }
+  }
 
   private busy(p: Player): boolean {
     return p.room !== null || this.queue === p;
@@ -235,6 +283,8 @@ export class Lobby {
       if (p && p.room === room) {
         p.room = null;
         p.input = 0;
+        p.latch = 0;
+        p.lastBusy = this.tickNo;
       }
     }
   }
@@ -250,6 +300,8 @@ export class Lobby {
     if (!b) return;
     a.input = 0;
     b.input = 0;
+    a.latch = 0;
+    b.latch = 0;
     // A mirror match puts the second player in the alternate colours.
     room.m = createMatch({ char: a.char }, { char: b.char, skin: a.char === b.char ? 1 : 0 });
     room.state = 'playing';
@@ -261,7 +313,9 @@ export class Lobby {
     const m = room.m;
     const [a, b] = room.players;
     if (!m || !b) return;
-    stepMatch(m, a.input, b.input);
+    stepMatch(m, a.input | a.latch, b.input | b.latch);
+    a.latch = 0;
+    b.latch = 0;
 
     // Belt and braces: the simulation keeps fighters in bounds, but a state
     // that is somehow corrupt must never be broadcast or kept alive.

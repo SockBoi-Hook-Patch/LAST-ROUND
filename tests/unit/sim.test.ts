@@ -478,3 +478,38 @@ describe('roster', () => {
     expect(new Set(totals).size).toBe(1);
   });
 });
+
+describe('just-guard penalties cannot be avoided', () => {
+  it('a parried jump kick keeps its penalty after landing', () => {
+    const landRecovery = (penalty: number): number => {
+      const m = duel(500);
+      const a = m.fighters[0];
+      run(m, 6, (n) => (n === 0 ? IN.JUMP : 0));
+      stepMatch(m, IN.HEAVY, 0);
+      expect(a.move).toBe('AIR');
+      a.moveExtra = penalty; // as applied by a just guard
+      let landed = -1;
+      for (let n = 0; n < 120; n++) {
+        stepMatch(m, 0, 0);
+        if (landed < 0 && a.state === 'land') landed = n;
+        if (landed >= 0 && a.state === 'idle') return n - landed;
+      }
+      return -1;
+    };
+    expect(landRecovery(14)).toBe(landRecovery(0) + 14);
+  });
+
+  it('a parried jab cannot be cancelled into the next hit', () => {
+    const m = duel(100);
+    const fr = moveFrames('switch', 'L1');
+    const ev = run(
+      m,
+      40,
+      (n) => (n === 0 || n === fr.startup + 2 ? IN.LIGHT : 0),
+      (n) => (n >= fr.startup - 2 ? IN.BLOCK : 0),
+    );
+    const blk = ev.find((e): e is Extract<SimEvent, { type: 'block' }> => e.type === 'block');
+    expect(blk?.parry).toBe(true);
+    expect(ev.filter((e) => e.type === 'swing').length).toBe(1);
+  });
+});

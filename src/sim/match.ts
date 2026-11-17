@@ -396,7 +396,8 @@ function updateFighter(m: MatchState, i: 0 | 1, input: InputMask): void {
       } else {
         if (f.t <= fr.startup) f.vx = f.facing * def.lunge * c.reach;
         else f.vx *= 0.6;
-        if (f.moveHit && f.buffer && f.t > fr.startup && f.t < total) {
+        // A just-guarded move (moveExtra > 0) cannot be cancelled out of its penalty.
+        if (f.moveHit && f.moveExtra === 0 && f.buffer && f.t > fr.startup && f.t < total) {
           let next: MoveId | undefined;
           if (f.buffer === IN.LIGHT) next = def.cancel.light;
           else if (f.buffer === IN.HEAVY) next = def.cancel.heavy;
@@ -483,8 +484,10 @@ function integrate(m: MatchState, i: 0 | 1): void {
         m.events.push({ type: 'land', who: i, x: f.x, hard: true });
       } else if (f.state === 'attack') {
         const rec = f.move ? moveFrames(f.char, f.move).recovery : 0;
+        // Keep any just-guard penalty the airborne attack picked up.
+        const extra = f.moveExtra;
         enter(f, 'land');
-        f.moveExtra = rec;
+        f.moveExtra = rec + extra;
         f.vx = 0;
         m.events.push({ type: 'land', who: i, x: f.x, hard: false });
       } else if (f.state === 'jump') {
