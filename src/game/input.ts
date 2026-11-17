@@ -124,7 +124,15 @@ export class Input {
     if (bit === undefined) return;
     // Keep arrows / space from scrolling the page during a fight.
     e.preventDefault();
-    if (e.repeat) return;
+    if (e.repeat) {
+      // Auto-repeat of a key we no longer track (it was held through a menu):
+      // treat it as held again, but never as a fresh tap.
+      if (!this.keys.has(e.code)) {
+        this.keys.set(e.code, bit);
+        this.recomputeKeys();
+      }
+      return;
+    }
     this.keys.set(e.code, bit);
     // Only buttons are latched; a latched direction could cancel out the
     // opposite one held on the same tick.

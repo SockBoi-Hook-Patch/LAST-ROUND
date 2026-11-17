@@ -225,3 +225,70 @@ test.describe('accessibility basics', () => {
     }
   });
 });
+
+test.describe('keyboard and pause regressions', () => {
+  test('menu keys keep working when focus has left the menu, and Tab stays inside it', async ({ page }) => {
+    await openGame(page);
+    await page.locator('[data-act="settings"]').click();
+    await expect(page.locator('#screen[data-screen="settings"]')).toBeVisible();
+    await settled(page);
+    // Move focus out of the screen entirely.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#screen[data-screen="title"]')).toBeVisible();
+    await settled(page);
+    // Tab from the last control wraps to the first one.
+    const n = await page.locator('#screen button').count();
+    for (let i = 0; i < n + 2; i++) await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('#screen'))).toBe(true);
+  });
+
+  test('pausing during the intro keeps the round banner', async ({ page }) => {
+    await openGame(page);
+    await page.locator('[data-act="survival"]').click();
+    await settled(page);
+    await page.locator('[data-act="go"]').click();
+    await expect(page.locator('.announce__main')).toHaveText(/ROUND 1/);
+    await page.waitForTimeout(250);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#screen[data-screen="pause"]')).toBeVisible();
+    await page.waitForTimeout(2000);
+    await settled(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#screen')).toBeHidden();
+    await expect(page.locator('.announce__main')).toHaveText(/ROUND 1/);
+  });
+
+  test('English result screen uses the singular for one round', async ({ page }) => {
+    await openGame(page);
+    await startSurvival(page);
+    await page.evaluate(() => {
+      const lr = window.__LR!;
+      lr.freezeCpu(true);
+      lr.place(92);
+      lr.setHp(1, 5);
+    });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__LR!.place(92));
+    await page.keyboard.press('KeyJ');
+    await expect(page.locator('#screen[data-screen="clear"]')).toBeVisible({ timeout: 20_000 });
+    await settled(page);
+    await page.locator('.up').first().click();
+    await waitStateUi(page);
+    await page.evaluate(() => {
+      const lr = window.__LR!;
+      lr.cpuLevel(10);
+      lr.setHp(0, 1);
+      lr.place(100);
+    });
+    await expect(page.locator('#screen[data-screen="result"]')).toBeVisible({ timeout: 80_000 });
+    if ((await page.locator('html').getAttribute('lang')) === 'en') await expect(page.locator('.figures')).toContainText('1 round');
+  });
+});
+
+async function waitStateUi(page: import('@playwright/test').Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const s = window.__LR!.state();
+    return s.kind === 'survival' && s.phase === 'fight' && s.screen === null && s.round === 2;
+  });
+}

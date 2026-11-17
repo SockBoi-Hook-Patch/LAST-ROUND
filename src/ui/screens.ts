@@ -53,7 +53,11 @@ export class Screens {
   constructor(root: HTMLElement) {
     this.root = root;
     root.addEventListener('click', (e) => this.onClick(e));
-    root.addEventListener('keydown', (e) => this.onKey(e));
+    // Listen on the document so menu keys work even when focus has left the
+    // screen (e.g. Tab moved it to <body>).
+    document.addEventListener('keydown', (e) => {
+      if (this.current) this.onKey(e);
+    });
     root.addEventListener('focusin', (e) => {
       if ((e.target as HTMLElement).matches?.('button')) this.onSound?.('move');
     });
@@ -122,7 +126,29 @@ export class Screens {
     fn(el);
   }
 
+  private focusables(): HTMLElement[] {
+    return Array.from(this.root.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), input:not([disabled])')).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement,
+    );
+  }
+
   private onKey(e: KeyboardEvent): void {
+    if (e.key === 'Tab') {
+      // Keep keyboard focus inside the open screen.
+      const items = this.focusables();
+      if (!items.length) return;
+      const active = document.activeElement as HTMLElement | null;
+      const i = active ? items.indexOf(active) : -1;
+      let next: HTMLElement | null = null;
+      if (i < 0) next = items[e.shiftKey ? items.length - 1 : 0] as HTMLElement;
+      else if (!e.shiftKey && i === items.length - 1) next = items[0] as HTMLElement;
+      else if (e.shiftKey && i === 0) next = items[items.length - 1] as HTMLElement;
+      if (next) {
+        e.preventDefault();
+        next.focus();
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       // The menu owns this key press: it must not also reach the game (where
       // Escape would immediately pause the fight that was just resumed).
@@ -140,7 +166,7 @@ export class Screens {
     if (!dir) return;
     const active = document.activeElement as HTMLElement | null;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) return;
-    const items = Array.from(this.root.querySelectorAll<HTMLElement>('button:not([disabled]), input'));
+    const items = this.focusables();
     if (!items.length) return;
     const i = active ? items.indexOf(active) : -1;
     const next = items[(i + dir + items.length) % items.length] as HTMLElement;
@@ -372,6 +398,8 @@ export class Screens {
     onMotion: (m: MotionPref) => void;
     onTest: () => void;
     onBack: () => void;
+    /** Selector of the control to focus after opening (re-render after a change). */
+    focus?: string;
   }): void {
     const s = o.settings;
     const slider = (kind: 'master' | 'music' | 'sfx', label: TextKey): string => {
@@ -437,6 +465,7 @@ export class Screens {
     });
     const muteBtn = this.root.querySelector<HTMLElement>('[data-set="mute"]');
     muteBtn?.setAttribute('aria-label', t('settings.mute'));
+    if (o.focus) this.root.querySelector<HTMLElement>(o.focus)?.focus({ preventScroll: true });
   }
 
   /* ---------------------------------------------------------------- */
@@ -561,7 +590,7 @@ export class Screens {
         <dl class="figures">
           ${fig('result.score', fmt(r.score), true, o.newBest ? `<span class="badge">${esc(t('result.newBest'))}</span>` : '')}
           ${fig('result.best', fmt(o.bestScore))}
-          ${fig('result.rounds', t('result.rounds.v', { n: cleared }))}
+          ${fig('result.rounds', t(cleared === 1 ? 'result.rounds.one' : 'result.rounds.v', { n: cleared }))}
           ${fig('result.combo', String(r.stats.maxCombo))}
           ${fig('result.damage', fmt(r.stats.damageDealt))}
           ${fig('result.perfects', String(r.stats.perfects))}

@@ -71,6 +71,9 @@ export class Hud {
   private vCombo: [number, number] = [0, 0];
   private vComboDmg: [number, number] = [0, 0];
   private announceTimer = 0;
+  /** Time left on the announcement when the game was paused, or -1. */
+  private announceLeft = -1;
+  private announceEnd = 0;
   private showScore = true;
 
   constructor(root: HTMLElement) {
@@ -247,11 +250,30 @@ export class Hud {
     this.elAnnounce.classList.remove('is-on');
     void this.elAnnounce.offsetWidth;
     this.elAnnounce.classList.add('is-on');
-    if (ms > 0) this.announceTimer = window.setTimeout(() => this.clearAnnounce(), ms);
+    this.announceLeft = -1;
+    if (ms > 0) {
+      this.announceEnd = performance.now() + ms;
+      this.announceTimer = window.setTimeout(() => this.clearAnnounce(), ms);
+    }
+  }
+
+  /** Pause / resume the announcement timer together with the game. */
+  freeze(on: boolean): void {
+    if (on) {
+      if (!this.elAnnMain.textContent || this.announceLeft >= 0) return;
+      window.clearTimeout(this.announceTimer);
+      this.announceLeft = Math.max(0, this.announceEnd - performance.now());
+    } else if (this.announceLeft >= 0) {
+      const left = this.announceLeft;
+      this.announceLeft = -1;
+      this.announceEnd = performance.now() + left;
+      this.announceTimer = window.setTimeout(() => this.clearAnnounce(), left);
+    }
   }
 
   clearAnnounce(): void {
     window.clearTimeout(this.announceTimer);
+    this.announceLeft = -1;
     this.elAnnMain.textContent = '';
     this.elAnnSub.textContent = '';
     this.elAnnounce.classList.remove('is-on');

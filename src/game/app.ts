@@ -229,8 +229,9 @@ export class App {
     this.setMode('menu');
   }
 
-  goSettings(back: () => void): void {
+  goSettings(back: () => void, focus?: string): void {
     this.screens.settings({
+      focus,
       settings: this.settings,
       audioSupported: audio.supported,
       onVolume: (kind, v) => {
@@ -254,7 +255,7 @@ export class App {
         this.buildTouch();
         if (this.fight?.kind === 'online') this.onHudRebuild?.();
         else if (this.fight && this.fight.kind !== 'attract') this.setupHud();
-        this.goSettings(back);
+        this.goSettings(back, `[data-set="lang"][data-value="${lang}"]`);
       },
       onMotion: (m: MotionPref) => {
         this.settings.motion = m;
@@ -391,6 +392,7 @@ export class App {
       return;
     }
     this.paused = true;
+    this.hud.freeze(true);
     this.openPauseMenu();
   }
 
@@ -432,6 +434,7 @@ export class App {
   resume(): void {
     this.screens.close();
     this.paused = false;
+    this.hud.freeze(false);
     this.lastMs = performance.now();
     this.setMode('fight');
   }
@@ -667,7 +670,9 @@ export class App {
   }
 
   private frameBody(ms: number): void {
-    const dt = Math.min(100, Math.max(0, ms - this.lastMs));
+    // Slow devices take bigger steps (up to 15 ticks a frame) so the clock
+    // keeps real time; longer stalls (a breakpoint, a sleeping tab) are dropped.
+    const dt = Math.min(250, Math.max(0, ms - this.lastMs));
     this.lastMs = ms;
     this.frames++;
     const f = this.fight;
@@ -680,13 +685,13 @@ export class App {
         const rate = f.slow > 0 && !this.reduced ? KO_SLOW : 1;
         f.acc += dt * rate;
         let steps = 0;
-        while (f.acc >= TICK_MS && steps < 6) {
+        while (f.acc >= TICK_MS && steps < 15) {
           f.acc -= TICK_MS;
           steps++;
           this.stepFight(f);
           if (this.fight !== f) break;
         }
-        if (steps === 6) f.acc = 0;
+        if (steps === 15) f.acc = 0;
         this.time += (dt / 1000) * rate;
       }
     }
