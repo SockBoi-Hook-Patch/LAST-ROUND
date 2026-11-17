@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07090f" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="LAST ROUND — เกมต่อสู้เอาชีวิตรอด 2D ใต้รางรถไฟยามค่ำ เลือกนักสู้ ฝ่าด่าน 8 ยก เล่นได้ทั้งคีย์บอร์ดและจอสัมผัส"
+    />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <title>LAST ROUND</title>
+  </head>
+  <body>
+    <div id="app" class="app" data-mode="menu">
+      <div id="playfield" class="playfield">
+        <canvas id="game" class="playfield__canvas" role="img" aria-label="LAST ROUND"></canvas>
+        <div id="hud" class="hud" hidden></div>
+      </div>
+      <div id="touch" class="touch" hidden></div>
+      <main id="screen" class="screen" tabindex="-1" hidden></main>
+      <div id="live" class="sr-only" aria-live="polite"></div>
+    </div>
+    <noscript>
+      <p style="color: #ece6d6; background: #07090f; padding: 24px; font-family: sans-serif">
+        LAST ROUND ต้องเปิดใช้งาน JavaScript จึงจะเล่นได้ — This game needs JavaScript.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

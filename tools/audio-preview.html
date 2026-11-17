@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LAST ROUND — audio lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink900: #07090f;
+        --ink700: #141826;
+        --steel500: #2a324b;
+        --steel300: #69738f;
+        --bone100: #ece6d6;
+        --cyan: #3cd8c8;
+        --red: #f2475f;
+        --amber: #f4a63a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--ink900);
+        color: var(--bone100);
+        font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        letter-spacing: 0.12em;
+      }
+      h2 {
+        margin: 28px 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: var(--amber);
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0;
+        color: var(--steel300);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+      }
+      button {
+        padding: 10px 12px;
+        border: 1px solid var(--steel500);
+        background: var(--ink700);
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      button:hover,
+      button:focus-visible {
+        border-color: var(--cyan);
+        outline: none;
+      }
+      button[aria-pressed='true'] {
+        border-color: var(--amber);
+        color: var(--amber);
+      }
+      label {
+        display: grid;
+        grid-template-columns: 110px 1fr 48px;
+        align-items: center;
+        gap: 12px;
+        max-width: 520px;
+        margin: 6px 0;
+      }
+      input[type='range'] {
+        accent-color: var(--cyan);
+      }
+      #status {
+        margin-top: 10px;
+        color: var(--cyan);
+      }
+      #meter {
+        width: 100%;
+        max-width: 520px;
+        height: 12px;
+        margin-top: 12px;
+        border: 1px solid var(--steel500);
+        background: var(--ink700);
+      }
+      #meter > i {
+        display: block;
+        width: 0;
+        height: 100%;
+        background: var(--amber);
+      }
+      #log {
+        margin-top: 12px;
+        min-height: 1.4em;
+        white-space: pre-wrap;
+        color: var(--red);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LAST ROUND · AUDIO LAB</h1>
+    <p>Development tool. Every sound is synthesised live with the Web Audio API.</p>
+    <div id="status">locked — click anything to start audio</div>
+    <div id="meter" aria-hidden="true"><i></i></div>
+
+    <h2>Mix</h2>
+    <label>master <input id="vol-master" type="range" min="0" max="1" step="0.01" /><output></output></label>
+    <label>music <input id="vol-music" type="range" min="0" max="1" step="0.01" /><output></output></label>
+    <label>sfx <input id="vol-sfx" type="range" min="0" max="1" step="0.01" /><output></output></label>
+    <label>intensity <input id="intensity" type="range" min="0" max="1" step="0.01" value="0" /><output></output></label>
+    <label>pan <input id="pan" type="range" min="-1" max="1" step="0.05" value="0" /><output></output></label>
+    <div class="grid" style="margin-top: 10px; max-width: 520px">
+      <button id="mute" aria-pressed="false">mute</button>
+      <button id="suspend">suspend</button>
+      <button id="resume">resume</button>
+    </div>
+
+    <h2>Music</h2>
+    <div id="music" class="grid"></div>
+
+    <h2>Sound effects</h2>
+    <div id="sfx" class="grid"></div>
+
+    <div id="log" role="status"></div>
+    <script type="module" src="./audio-preview.ts"></script>
+  </body>
+</html>
