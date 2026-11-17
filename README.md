@@ -69,6 +69,12 @@ npm run preview      # เปิดดู dist/ ที่ build แล้ว
 
 `dist/` เป็นเว็บ static ล้วน ใช้ path แบบ relative จึงวางบน hosting ใดก็ได้ (รวมถึง sub-path เช่น GitHub Pages)
 
+ต้องการไฟล์เดียวสำหรับส่งต่อหรือเปิดตรงจากเครื่อง (ไม่มีโหมดออนไลน์):
+
+```bash
+npm run build:single   # ได้ dist-single/last-round.html (~550 KB รวมสคริปต์ ฟอนต์ และภาพทั้งหมด)
+```
+
 ## การทดสอบ
 
 ```bash
